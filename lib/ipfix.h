@@ -40,7 +40,7 @@ extern "C" {
  **   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  **   |                        Source ID                              |
  **   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- */   
+ */
 /** ipfix header format
  **  0                   1                   2                   3
  **    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -53,7 +53,7 @@ extern "C" {
  **   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
  **   |                     Observation Domain ID                     |
  **   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- */   
+ */
 typedef struct {
     uint16_t   version;     /* version of Flow Record format of this packet */
     union {
@@ -96,9 +96,9 @@ typedef struct {
 /** bearer protocol
  */
 typedef enum {
-    IPFIX_PROTO_SCTP = 132,    /* IPPROTO_SCTP */    
-    IPFIX_PROTO_TCP  = 6,      /* IPPROTO_TCP  */    
-    IPFIX_PROTO_UDP  = 17      /* IPPROTO_UDP  */    
+    IPFIX_PROTO_SCTP = 132,    /* IPPROTO_SCTP */
+    IPFIX_PROTO_TCP  = 6,      /* IPPROTO_TCP  */
+    IPFIX_PROTO_UDP  = 17      /* IPPROTO_UDP  */
 } ipfix_proto_t;
 
 typedef struct
@@ -134,6 +134,7 @@ typedef struct ipfix_template
     int                     maxfields;         /* sizeof fields */
 
     uint32_t                odid;  /* observation domain id */
+    struct ipfix_template_t *sub_template;
 } ipfix_template_t;
 
 typedef struct ipfix_message
@@ -191,6 +192,15 @@ typedef struct {
     uint16_t  length;		/* length of this element in bytes - use 65535 for varlen elements */
 } export_fields_t;
 
+typedef struct subtemplatelist_rec {
+    /*uint8_t pad;
+    uint16_t length;*/
+    uint8_t sem;
+    uint16_t template_id;
+    void *content;
+} subtemplatelist_rec_t;
+#define SUBTEMPLATELIST_INIT() {/*.pad=0xff,*/.sem=0x03}
+
 /** exporter funcs
  */
 int  ipfix_open( ipfix_t **ifh, int sourceid, int ipfix_version );
@@ -217,6 +227,8 @@ int  ipfix_export_array_with_odid( ipfix_t *ifh, uint32_t, ipfix_template_t *tem
 
 int  ipfix_export_flush( ipfix_t *ifh );
 void ipfix_close( ipfix_t *ifh );
+int ipfix_add_stl(ipfix_t *ifh, ipfix_template_t *templ);
+int ipfix_set_stl_tmpl(ipfix_t *ifh, ipfix_template_t *templ, ipfix_template_t *sub_template);
 
 /** experimental
  */

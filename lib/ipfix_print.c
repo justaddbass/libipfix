@@ -62,7 +62,7 @@ static void outf( FILE *fp, char fmt[], ... )
     }
 }
 
-static int ipfix_print_newsource( ipfixs_node_t *s, void *arg ) 
+static int ipfix_print_newsource( ipfixs_node_t *s, void *arg )
 {
     FILE *fp = (FILE*)arg;
 
@@ -81,20 +81,20 @@ static int ipfix_print_newmsg( ipfixs_node_t *s, ipfix_hdr_t *hdr, void *arg )
     outf( fp, "IPFIX-HDR:\n version=%u,", hdr->version );
     if ( hdr->version == IPFIX_VERSION_NF9 ) {
         outf( fp, " records=%u\n", hdr->u.nf9.count );
-        strftime( timebuf, 40, "%Y-%m-%d %T %Z", 
+        strftime( timebuf, 40, "%Y-%m-%d %T %Z",
                   localtime( (const time_t *) &(hdr->u.nf9.unixtime) ));
-        outf( fp, " sysuptime=%.3fs, unixtime=%lu (%s)\n", 
-              (double)(hdr->u.nf9.sysuptime)/1000.0, 
+        outf( fp, " sysuptime=%.3fs, unixtime=%lu (%s)\n",
+              (double)(hdr->u.nf9.sysuptime)/1000.0,
               (u_long)hdr->u.nf9.unixtime, timebuf );
         outf( fp, " seqno=%lu,", (u_long)hdr->seqno );
         outf( fp, " sourceid=%lu\n", (u_long)hdr->sourceid );
     }
     else {
         outf( fp, " length=%u\n", hdr->u.ipfix.length );
-        strftime( timebuf, 40, "%Y-%m-%d %T %Z", 
-                  localtime( (const time_t *) &(hdr->u.ipfix.exporttime) ));
-        outf( fp, " unixtime=%lu (%s)\n", 
-              (u_long)hdr->u.ipfix.exporttime, timebuf );
+        //strftime( timebuf, 40, "%Y-%m-%d %T %Z",
+        //          localtime( (const time_t *) &(hdr->u.ipfix.exporttime) ));
+        //outf( fp, " unixtime=%lu (%s)\n",
+        //      (u_long)hdr->u.ipfix.exporttime, timebuf );
         outf( fp, " seqno=%lu,", (u_long)hdr->seqno );
         outf( fp, " odid=%lu\n", (u_long)hdr->sourceid );
     }
@@ -115,8 +115,8 @@ static int ipfix_print_trecord( ipfixs_node_t *s, ipfixt_node_t *t, void *arg )
     for ( i=0; i<t->ipfixt->nfields; i++ ) {
         outf( fp, "  field%02d:%s ie=%u.%u, len=%u (%s)\n", i+1,
               (i<t->ipfixt->nscopefields)?" scope":"",
-              t->ipfixt->fields[i].elem->ft->eno, 
-              t->ipfixt->fields[i].elem->ft->ftype, 
+              t->ipfixt->fields[i].elem->ft->eno,
+              t->ipfixt->fields[i].elem->ft->ftype,
               t->ipfixt->fields[i].flength,
               t->ipfixt->fields[i].elem->ft->name );
     }
@@ -143,8 +143,15 @@ static int ipfix_print_drecord( ipfixs_node_t      *s,
     for ( i=0; i<t->ipfixt->nfields; i++ ) {
         outf( fp, " %s: ", t->ipfixt->fields[i].elem->ft->name );
 
-        t->ipfixt->fields[i].elem->snprint( tmpbuf, sizeof(tmpbuf), 
-                                            data->addrs[i], data->lens[i] );
+        if(t->ipfixt->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
+            t->ipfixt->fields[i].elem->snprint_stl( tmpbuf, sizeof(tmpbuf),
+                                                data->addrs[i], data->lens[i], t->ipfixt->sub_template );
+        }
+        else {
+            t->ipfixt->fields[i].elem->snprint( tmpbuf, sizeof(tmpbuf),
+                                                data->addrs[i], data->lens[i] );
+        }
+
         outf( fp, "%s\n", tmpbuf );
     }
 
@@ -158,7 +165,7 @@ static void print_cleanup( void *arg )
 
 /*----- export funcs -----------------------------------------------------*/
 
-int ipfix_col_start_msglog( FILE *fpout ) 
+int ipfix_col_start_msglog( FILE *fpout )
 {
     if ( g_colinfo ) {
         errno = EAGAIN;

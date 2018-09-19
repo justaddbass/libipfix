@@ -53,7 +53,7 @@ $$LIC$$
 
 /*----- defines ----------------------------------------------------------*/
 
-#define NODEBUG
+#define DEBUG
 
 #ifndef NTOHLL
 uint8_t g_isLittleEndian = 0;
@@ -124,7 +124,38 @@ int  _ipfix_send_message( ipfix_t *ifh, ipfix_collector_t *col, int flag,
 int  _ipfix_write_msghdr( ipfix_t *ifh, ipfix_message_t *msg, iobuf_t *buf );
 void _ipfix_disconnect( ipfix_collector_t *col );
 int  _ipfix_export_flush( ipfix_t *ifh );
+ipfix_field_t *ipfix_create_stl_ftinfo();
 
+//adds a stl field to template templ
+int ipfix_add_stl(ipfix_t *ifh, ipfix_template_t *templ) {
+	int i;
+
+    if ( (templ->nfields < templ->maxfields)
+         && (292 < IPFIX_EFT_VENDOR_BIT) ) {
+        /** set template field
+         */
+        i = templ->nfields;
+        templ->fields[i].flength = IPFIX_FT_VARLEN;
+
+        if ((templ->fields[i].elem = ipfix_create_stl_ftinfo())==NULL) {
+            errno = EINVAL;
+            return -1;
+        }
+
+        templ->nfields ++;
+        templ->ndatafields ++;
+    }
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return 0;
+}
+
+int ipfix_set_stl_tmpl(ipfix_t *ifh, ipfix_template_t *templ, ipfix_template_t *sub_template) {
+	templ->sub_template = sub_template;
+}
 
 /* name      : do_writeselect
  * parameter : > int  fd     file descr
@@ -584,6 +615,67 @@ int ipfix_snprint_float( char *str, size_t size, void *data, size_t len )
     return snprintf( str, size, "err" );
 }
 
+int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
+	ipfix_template_t *templ = (ipfix_template_t*)stl;
+
+	unsigned int offset = 0;
+	char* ptr_in = (char*)in;
+	subtemplatelist_rec_t stl_tmp = SUBTEMPLATELIST_INIT();
+	stl_tmp.template_id = templ->tid;
+	if((stl_tmp.content = malloc(len)) == NULL) {
+		return -1;
+	}
+	char* ptr_out = (char*)stl_tmp.content;
+
+	for(int i = 0; i < templ->nfields; ++i) {
+		int coding = templ->fields[i].elem->ft->coding;
+		int elem_length = templ->fields[i].elem->ft->length;
+		if(coding != IPFIX_CODING_STL) {
+			templ->fields[i].elem->encode((ptr_in + offset), (ptr_out + offset), elem_length);
+		}
+		else {
+			templ->fields[i].elem->encode_stl((ptr_in + offset), (ptr_out + offset), elem_length, templ->sub_template);
+		}
+		memcpy(out, &stl_tmp, sizeof(stl_tmp));
+		memcpy(((subtemplatelist_rec_t*)out)->content, stl_tmp.content, len);
+
+		offset += elem_length;
+	}
+	free(stl_tmp.content);
+	return 0;
+}
+
+int ipfix_decode_stl(void* in, void* out, size_t len, void* stl) {
+	ipfix_template_t *templ = (ipfix_template_t*)stl;
+
+	printf("not implemented yet\n");
+
+	for(int i = 0; i < templ->nfields; ++i) {
+		int coding = templ->fields[i].elem->ft->coding;
+		if(coding != IPFIX_CODING_STL) {
+			templ->fields[i].elem->decode(0, 0, 0 );
+		}
+		else {
+			templ->fields[i].elem->decode_stl(0, 0, 0, 0);
+		}
+	}
+	return 0;
+}
+
+int ipfix_snprint_stl(char* str, size_t size, void* data, size_t len, void* stl) {
+	ipfix_template_t *templ = (ipfix_template_t*)stl;
+
+	for(int i = 0; i < templ->nfields; ++i) {
+		int coding = templ->fields[i].elem->ft->coding;
+		if(coding != IPFIX_CODING_STL) {
+			return templ->fields[i].elem->snprint(str, size, data, len);
+		}
+		else {
+			return templ->fields[i].elem->snprint_stl(0, 0, 0, 0, 0);
+		}
+	}
+}
+
 /* name:       ipfix_free_unknown_ftinfo()
  */
 void ipfix_free_unknown_ftinfo( ipfix_field_t *f )
@@ -634,6 +726,36 @@ ipfix_field_t *ipfix_create_unknown_ftinfo( int eno, int type )
     return f;
 }
 
+ipfix_field_t *ipfix_create_stl_ftinfo() {
+	ipfix_field_t	*f;
+	ipfix_field_type_t *ft;
+	//char			tmpbuf[50];
+
+	if ( (f=calloc(1, sizeof(ipfix_field_t))) ==NULL ) {
+        return NULL;
+    }
+    if ( (ft=calloc(1, sizeof(ipfix_field_type_t))) ==NULL ) {
+        free( f );
+        return NULL;
+    }
+
+	//sprintf( tmpbuf, "%u_%u", 0, 292 );
+	ft->name = strdup("subTemplateList");
+	ft->documentation = strdup("");
+    ft->eno    = 0;
+    ft->ftype  = 292;
+	ft->length = IPFIX_FT_VARLEN;
+    ft->coding = IPFIX_CODING_STL;
+
+    f->next    = NULL;
+    f->ft      = ft;
+    f->encode_stl  = ipfix_encode_stl;
+    f->decode_stl  = ipfix_decode_stl;
+    f->snprint_stl = ipfix_snprint_stl;
+
+    return f;
+}
+
 /* name:       ipfix_get_ftinfo()
  * parameters: eno, ftype
  * return:     ftinfo from global list or NULL
@@ -675,9 +797,9 @@ int ipfix_get_eno_ieid( char *field, int *eno, int *ieid )
  */
 int ipfix_init( void )
 {
-    /* check and store in global flag, 
+    /* check and store in global flag,
      * whether we are on a Small or BigEndian machine */
-    testEndianness(); 
+    testEndianness();
 
     if ( g_tstart ) {
         ipfix_cleanup();
@@ -712,7 +834,7 @@ int ipfix_init( void )
 
     if ( ipfix_add_vendor_information_elements( ipfix_reverse_field_types ) <0 ) {
         return -1;
-    }    
+    }
 
     return 0;
 }
@@ -773,11 +895,16 @@ int ipfix_add_vendor_information_elements( ipfix_field_type_t *fields )
             n->decode = ipfix_decode_bytes;
             n->snprint= ipfix_snprint_string;
         }
-        else {
+        else if ( ft->coding == IPFIX_CODING_BYTES ) {
             n->encode = ipfix_encode_bytes;
             n->decode = ipfix_decode_bytes;
             n->snprint= ipfix_snprint_bytes;
         }
+		else {
+			n->encode_stl = ipfix_encode_stl;
+			n->decode_stl = ipfix_decode_stl;
+			n->snprint_stl= ipfix_snprint_stl;
+		}
 
         /** insert node
          */
@@ -1497,7 +1624,7 @@ int _ipfix_write_template( ipfix_t           *ifh,
           if ( ifh->offset > 0 ) {
               memmove( ifh->buffer + tsize, ifh->buffer, ifh->offset );
           	  if ( ifh->cs_tid )
-                  ifh->cs_header += tsize;          
+                  ifh->cs_header += tsize;
           }
 
           buf = ifh->buffer;
@@ -2292,13 +2419,17 @@ int _ipfix_export_array( ipfix_t          *ifh,
      *       - separate template transmission per collector/protocol
      */
     if ( templ->tsend == 0 ) {
-        ipfix_collector_t *col = ifh->collectors;
 
-        while ( col ) {
-            if ( _ipfix_write_template( ifh, col, templ ) <0 )
-                return -1;
-            col = col->next;
-        }
+		ipfix_template_t *tmp = templ;
+		while(tmp) {
+			ipfix_collector_t *col = ifh->collectors;
+			while ( col ) {
+			    if ( _ipfix_write_template( ifh, col, tmp ) <0 )
+			        return -1;
+			    col = col->next;
+			}
+			tmp = tmp->sub_template;
+		}
     }
     else {
         /* move this code into a callback func
@@ -2331,7 +2462,7 @@ int _ipfix_export_array( ipfix_t          *ifh,
         newset_f = 1;
         datasetlen = 4;
     }
-    
+
     for ( i=0; i<nfields; i++ ) {
         if ( templ->fields[i].flength == IPFIX_FT_VARLEN ) {
             if ( lengths[i]>254 )
@@ -2369,7 +2500,7 @@ int _ipfix_export_array( ipfix_t          *ifh,
         INSERTU16( buf+buflen, buflen, templ->tid );
         INSERTU16( buf+buflen, buflen, datasetlen );
     }
-    /* csc: to be checked with Lutz whether the usage of "datasetlen" 
+    /* csc: to be checked with Lutz whether the usage of "datasetlen"
      * in the last 30 lines of code is correct */
 
     /* insert data record
@@ -2390,9 +2521,12 @@ int _ipfix_export_array( ipfix_t          *ifh,
         if ( templ->fields[i].relay_f ) {
             ipfix_encode_bytes( p, buf+buflen, lengths[i] ); /* no encoding */
         }
-        else {
-            templ->fields[i].elem->encode( p, buf+buflen, lengths[i] );
+        else if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
+            templ->fields[i].elem->encode_stl( p, buf+buflen, lengths[i], templ->sub_template);
         }
+		else {
+			templ->fields[i].elem->encode( p, buf+buflen, lengths[i]);
+		}
         buflen += lengths[i];
     }
 
@@ -2422,7 +2556,7 @@ int _ipfix_export_flush( ipfix_t *ifh )
         /* finish current dataset */
         _finish_cs( ifh );
     }
-    
+
     if ( (buf=_ipfix_getbuf()) ==NULL )
         return -1;
 

@@ -14,12 +14,17 @@
 #define IPFIX_CODING_FLOAT  5
 #define IPFIX_CODING_NTP    6
 #define IPFIX_CODING_IPADDR 7
+#define IPFIX_CODING_STL    9
 
 #define REV_PEN 29305 /* reverse elements private enterprise number, see RFC5103 */
 
 typedef int (*ipfix_encode_func) (void *, void*, size_t);
 typedef int (*ipfix_decode_func) (void *, void*, size_t);
 typedef int (*ipfix_snprint_func) (char *, size_t, void*, size_t);
+
+typedef int (*ipfix_encode_stl_func) (void*, void*, size_t, void*);
+typedef int (*ipfix_decode_stl_func) (void*, void*, size_t, void*);
+typedef int (*ipfix_snprint_stl_func) (char*, size_t, void*, size_t, void*);
 
 typedef struct
 {
@@ -36,9 +41,18 @@ typedef struct ipfix_field
 {
     struct ipfix_field   *next;
     ipfix_field_type_t   *ft;
-    ipfix_encode_func    encode;
-    ipfix_decode_func    decode;
-    ipfix_snprint_func   snprint;
+    union {
+        struct {
+            ipfix_encode_func    encode;
+            ipfix_decode_func    decode;
+            ipfix_snprint_func   snprint;
+        };
+        struct {
+            ipfix_encode_stl_func encode_stl;
+            ipfix_decode_stl_func decode_stl;
+            ipfix_snprint_stl_func snprint_stl;
+        };
+    };
 
 } ipfix_field_t;
 
@@ -254,6 +268,9 @@ typedef struct ipfix_field
 #define IPFIX_FT_HASHSELECTEDRANGEMAX         332
 #define IPFIX_FT_HASHDIGESTOUTPUT             333
 #define IPFIX_FT_HASHINITIALISERVALUE         334
+#define IPFIX_FT_SUBTEMPLATELIST              292
+#define IPFIX_FT_HTTPSTATUSCODE               457
+#define IPFIX_FT_HTTPREQUESTMETHOD            459
 
 /* column name definitions
  */
