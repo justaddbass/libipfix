@@ -2386,7 +2386,10 @@ int ipfix_export( ipfix_t *ifh, ipfix_template_t *templ, ... )
     for ( i=0; i<templ->nfields; i++ )
     {
         g_data.addrs[i] = va_arg(args, char*);          /* todo: change this! */
-        if ( templ->fields[i].flength == IPFIX_FT_VARLEN )
+		if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL)
+			
+			continue;
+        else if ( templ->fields[i].flength == IPFIX_FT_VARLEN )
             g_data.lens[i] = va_arg(args, int);
         else
             g_data.lens[i] = templ->fields[i].flength;
