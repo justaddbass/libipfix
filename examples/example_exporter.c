@@ -18,13 +18,6 @@ struct http_record {
     unsigned short status_code;
 };
 
-struct subtemplatelist {
-    void **ptrs;
-    uint32_t *lens;
-    ipfix_template_t *templ;
-    unsigned int elem_count;
-};
-
 int main ( int argc, char **argv )
 {
     char      *optstr="hc:p:vstu";
@@ -151,10 +144,10 @@ int main ( int argc, char **argv )
     rec[2] = (struct http_record) {.request_method=3, .status_code=404};
     rec[3] = (struct http_record) {.request_method=4, .status_code=500};
 
-    struct subtemplatelist *stl = malloc(sizeof(struct subtemplatelist));
-    stl->ptrs = malloc(sizeof(struct http_record*) * 4);
+    subtemplatelist_t *stl = malloc(sizeof(subtemplatelist_t));
+    stl->addrs = malloc(sizeof(struct http_record*) * 4);
     for(int i = 0; i < 4; ++i)
-        stl->ptrs[i] = &rec[i];
+        stl->addrs[i] = &rec[i];
     stl->lens = malloc(sizeof(uint32_t) * 4);
     for(int i = 0; i < 4; ++i)
         stl->lens[i] = 4;
@@ -163,7 +156,7 @@ int main ( int argc, char **argv )
 
     /** export some data
      */
-    for( j=0; j<2; j++ ) {
+    for( j=0; j<4; j++ ) {
 
         printf( "[%d] export some data ... ", j );
         fflush( stdout) ;
@@ -174,7 +167,11 @@ int main ( int argc, char **argv )
             exit(1);
         }*/
 
-        if(ipfix_export(ipfixh, stl_template, buf, rec, 32) < 0) {
+        if(ipfix_export(ipfixh, stl_template, buf, stl) < 0) {
+            fprintf( stderr, "ipfix_export() failed: %s\n", strerror(errno) );
+            exit(1);
+        }
+        if(ipfix_export(ipfixh, stl_template, buf, stl) < 0) {
             fprintf( stderr, "ipfix_export() failed: %s\n", strerror(errno) );
             exit(1);
         }

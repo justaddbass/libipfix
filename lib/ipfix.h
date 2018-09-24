@@ -201,6 +201,13 @@ typedef struct subtemplatelist_rec {
 } subtemplatelist_rec_t;
 #define SUBTEMPLATELIST_INIT() {/*.pad=0xff,*/.sem=0x03}
 
+typedef struct subtemplatelist {
+    void **addrs;
+    uint32_t *lens;
+    ipfix_template_t *templ;
+    unsigned int elem_count;
+} subtemplatelist_t;
+
 /** exporter funcs
  */
 int  ipfix_open( ipfix_t **ifh, int sourceid, int ipfix_version );

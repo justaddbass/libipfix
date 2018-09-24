@@ -617,31 +617,41 @@ int ipfix_snprint_float( char *str, size_t size, void *data, size_t len )
 
 int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 	ipfix_template_t *templ = (ipfix_template_t*)stl;
-
+	int nfields = templ->nfields;
+	ipfix_template_field_t *fields = templ->fields;
+	int data_len = 0;
 	unsigned int offset = 0;
-	char* ptr_in = (char*)in;
-	subtemplatelist_rec_t stl_tmp = SUBTEMPLATELIST_INIT();
-	stl_tmp.template_id = templ->tid;
-	if((stl_tmp.content = malloc(len)) == NULL) {
+	subtemplatelist_t *stl_in = (subtemplatelist_t*)in;
+	subtemplatelist_rec_t stl_out = SUBTEMPLATELIST_INIT();
+	stl_out.template_id = templ->tid;
+
+	/*while(templ != NULL) {
+		for(int i = 0; i < templ->nfields; ++i) {
+			data_len += templ->fields[i].elem->ft->length;
+		}
+		templ = templ->sub_template;
+	}*/
+
+	if((stl_out.content = malloc(len)) == NULL) {
 		return -1;
 	}
-	char* ptr_out = (char*)stl_tmp.content;
-
-	for(int i = 0; i < templ->nfields; ++i) {
-		int coding = templ->fields[i].elem->ft->coding;
-		int elem_length = templ->fields[i].elem->ft->length;
+	for(int i = 0; i < nfields; ++i) {
+		int coding = fields[i].elem->ft->coding;
+		int elem_length = fields[i].elem->ft->length;
 		if(coding != IPFIX_CODING_STL) {
-			templ->fields[i].elem->encode((ptr_in + offset), (ptr_out + offset), elem_length);
+			fields[i].elem->encode(stl_in->addrs[i], ((char*)stl_out.content + offset), elem_length);
 		}
 		else {
-			templ->fields[i].elem->encode_stl((ptr_in + offset), (ptr_out + offset), elem_length, templ->sub_template);
+			//fields[i].elem->encode_stl(stl_in->ptrs[i], , elem_length, templ->sub_template);
+
 		}
-		memcpy(out, &stl_tmp, sizeof(stl_tmp));
-		memcpy(((subtemplatelist_rec_t*)out)->content, stl_tmp.content, len);
+
+		memcpy(out, &stl_out, sizeof(stl_out));
+		//memcpy(((subtemplatelist_rec_t*)out)->content, stl_out.content, len);
 
 		offset += elem_length;
 	}
-	free(stl_tmp.content);
+	free(stl_out.content);
 	return 0;
 }
 
@@ -656,7 +666,7 @@ int ipfix_decode_stl(void* in, void* out, size_t len, void* stl) {
 			templ->fields[i].elem->decode(0, 0, 0 );
 		}
 		else {
-			templ->fields[i].elem->decode_stl(0, 0, 0, 0);
+			//templ->fields[i].elem->decode_stl(0, 0, 0, 0);
 		}
 	}
 	return 0;
@@ -671,7 +681,7 @@ int ipfix_snprint_stl(char* str, size_t size, void* data, size_t len, void* stl)
 			return templ->fields[i].elem->snprint(str, size, data, len);
 		}
 		else {
-			return templ->fields[i].elem->snprint_stl(0, 0, 0, 0, 0);
+			//return templ->fields[i].elem->snprint_stl(0, 0, 0, 0, 0);
 		}
 	}
 }
@@ -2386,9 +2396,18 @@ int ipfix_export( ipfix_t *ifh, ipfix_template_t *templ, ... )
     for ( i=0; i<templ->nfields; i++ )
     {
         g_data.addrs[i] = va_arg(args, char*);          /* todo: change this! */
-		if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL)
-			
-			continue;
+		if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
+			subtemplatelist_t *stl = (subtemplatelist_t*)g_data.addrs[i];
+			unsigned int data_len = 0;
+			//while(stl != NULL) {
+				for(int i = 0; i < stl->elem_count; ++i) {
+					data_len += stl->lens[i];
+				}
+				//stl = stl->sub_template;
+			//}
+
+			g_data.lens[i] = data_len + 3;
+		}
         else if ( templ->fields[i].flength == IPFIX_FT_VARLEN )
             g_data.lens[i] = va_arg(args, int);
         else
@@ -2478,6 +2497,9 @@ int _ipfix_export_array( ipfix_t          *ifh,
                 return -1;
             }
         }
+		// if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
+		// 	datasetlen += 3;
+		// }
         datasetlen += lengths[i];
     }
 
@@ -2525,10 +2547,10 @@ int _ipfix_export_array( ipfix_t          *ifh,
             ipfix_encode_bytes( p, buf+buflen, lengths[i] ); /* no encoding */
         }
         else if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
-            templ->fields[i].elem->encode_stl( p, buf+buflen, lengths[i], templ->sub_template);
+            templ->fields[i].elem->encode_stl(p, buf+buflen, lengths[i], templ->sub_template);
         }
 		else {
-			templ->fields[i].elem->encode( p, buf+buflen, lengths[i]);
+			templ->fields[i].elem->encode(p, buf+buflen, lengths[i]);
 		}
         buflen += lengths[i];
     }
