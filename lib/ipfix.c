@@ -623,30 +623,24 @@ int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 	subtemplatelist_t *stl_in = (subtemplatelist_t*)in;
 	subtemplatelist_rec_t stl_out = SUBTEMPLATELIST_INIT();
 	stl_out.template_id = htons(templ->tid);
+	stl_out.content = (void*)((char*)out + sizeof(stl_out) - sizeof(subtemplatelist_t*));
 
-	if((stl_out.content = malloc(len)) == NULL) {
-		return -1;
-	}
+	memcpy(out, &stl_out, sizeof(stl_out));
+
 	for(int i = 0; i < stl_in->elem_count; ++i) {
 		for(int j = 0; j < templ->nfields; ++j) {
 			int coding = fields[j].elem->ft->coding;
 			int elem_length = fields[j].elem->ft->length;
 			if(coding != IPFIX_CODING_STL) {
-				printf("%d\n", stl_in->offsets[j]);
 				fields[j].elem->encode((stl_in->addrs[i] + stl_in->offsets[j]), ((char*)stl_out.content + offset), elem_length);
 			}
 			else {
 				//fields[i].elem->encode_stl(stl_in->ptrs[i], , elem_length, templ->sub_template);
 			}
 			offset += elem_length;
-			//printf("%d\n", offset);
 		}
 	}
 
-	memcpy(out, &stl_out, sizeof(stl_out));
-	memcpy((out + sizeof(stl_out) - sizeof(subtemplatelist_t*)), stl_out.content, len);
-
-	free(stl_out.content);
 	return 0;
 }
 
