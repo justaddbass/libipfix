@@ -148,9 +148,10 @@ int main ( int argc, char **argv )
     stl->addrs = malloc(sizeof(struct http_record*) * 4);
     for(int i = 0; i < 4; ++i)
         stl->addrs[i] = &rec[i];
-    stl->lens = malloc(sizeof(uint32_t) * 4);
+    stl->offsets = malloc(sizeof(uint32_t) * 4);
     for(int i = 0; i < 4; ++i)
-        stl->lens[i] = 4;
+        stl->offsets[i] = i * 2;
+    stl->max_sz = 16;
     stl->templ = http_session_template;
     stl->elem_count = 4;
 

@@ -193,17 +193,16 @@ typedef struct {
 } export_fields_t;
 
 typedef struct subtemplatelist_rec {
-    /*uint8_t pad;
-    uint16_t length;*/
     uint8_t sem;
     uint16_t template_id;
     void *content;
-} subtemplatelist_rec_t;
-#define SUBTEMPLATELIST_INIT() {/*.pad=0xff,*/.sem=0x03}
+}__attribute__((packed, aligned(1))) subtemplatelist_rec_t;
+#define SUBTEMPLATELIST_INIT() {.sem=0x03,.template_id=0,.content=NULL}
 
 typedef struct subtemplatelist {
     void **addrs;
-    uint32_t *lens;
+    uint32_t *offsets;
+    uint32_t max_sz;
     ipfix_template_t *templ;
     unsigned int elem_count;
 } subtemplatelist_t;

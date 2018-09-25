@@ -619,38 +619,33 @@ int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 	ipfix_template_t *templ = (ipfix_template_t*)stl;
 	int nfields = templ->nfields;
 	ipfix_template_field_t *fields = templ->fields;
-	int data_len = 0;
 	unsigned int offset = 0;
 	subtemplatelist_t *stl_in = (subtemplatelist_t*)in;
 	subtemplatelist_rec_t stl_out = SUBTEMPLATELIST_INIT();
-	stl_out.template_id = templ->tid;
-
-	/*while(templ != NULL) {
-		for(int i = 0; i < templ->nfields; ++i) {
-			data_len += templ->fields[i].elem->ft->length;
-		}
-		templ = templ->sub_template;
-	}*/
+	stl_out.template_id = htons(templ->tid);
 
 	if((stl_out.content = malloc(len)) == NULL) {
 		return -1;
 	}
-	for(int i = 0; i < nfields; ++i) {
-		int coding = fields[i].elem->ft->coding;
-		int elem_length = fields[i].elem->ft->length;
-		if(coding != IPFIX_CODING_STL) {
-			fields[i].elem->encode(stl_in->addrs[i], ((char*)stl_out.content + offset), elem_length);
+	for(int i = 0; i < stl_in->elem_count; ++i) {
+		for(int j = 0; j < templ->nfields; ++j) {
+			int coding = fields[j].elem->ft->coding;
+			int elem_length = fields[j].elem->ft->length;
+			if(coding != IPFIX_CODING_STL) {
+				printf("%d\n", stl_in->offsets[j]);
+				fields[j].elem->encode((stl_in->addrs[i] + stl_in->offsets[j]), ((char*)stl_out.content + offset), elem_length);
+			}
+			else {
+				//fields[i].elem->encode_stl(stl_in->ptrs[i], , elem_length, templ->sub_template);
+			}
+			offset += elem_length;
+			//printf("%d\n", offset);
 		}
-		else {
-			//fields[i].elem->encode_stl(stl_in->ptrs[i], , elem_length, templ->sub_template);
-
-		}
-
-		memcpy(out, &stl_out, sizeof(stl_out));
-		//memcpy(((subtemplatelist_rec_t*)out)->content, stl_out.content, len);
-
-		offset += elem_length;
 	}
+
+	memcpy(out, &stl_out, sizeof(stl_out));
+	memcpy((out + sizeof(stl_out) - sizeof(subtemplatelist_t*)), stl_out.content, len);
+
 	free(stl_out.content);
 	return 0;
 }
@@ -2398,15 +2393,7 @@ int ipfix_export( ipfix_t *ifh, ipfix_template_t *templ, ... )
         g_data.addrs[i] = va_arg(args, char*);          /* todo: change this! */
 		if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
 			subtemplatelist_t *stl = (subtemplatelist_t*)g_data.addrs[i];
-			unsigned int data_len = 0;
-			//while(stl != NULL) {
-				for(int i = 0; i < stl->elem_count; ++i) {
-					data_len += stl->lens[i];
-				}
-				//stl = stl->sub_template;
-			//}
-
-			g_data.lens[i] = data_len + 3;
+			g_data.lens[i] = stl->max_sz + 3;
 		}
         else if ( templ->fields[i].flength == IPFIX_FT_VARLEN )
             g_data.lens[i] = va_arg(args, int);
