@@ -432,11 +432,11 @@ ipfix_field_type_t ipfix_field_types[] = {
      "hashDigestOutput", "" },
    { 0, IPFIX_FT_HASHINITIALISERVALUE, 8, IPFIX_CODING_UINT,
      "hashInitialiserValue", "" },
-     {0, IPFIX_FT_HTTPSTATUSCODE, 2, IPFIX_CODING_UINT,
-      "httpStatusCode", ""},
-     {0, IPFIX_FT_HTTPREQUESTMETHOD, 2, IPFIX_CODING_UINT,
-      "httpRequestMethod", ""},
-     {0, IPFIX_FT_SUBTEMPLATELIST, 65535, IPFIX_CODING_STL,
-      "subTemplateList", ""},
+   {0, IPFIX_FT_HTTPSTATUSCODE, 2, IPFIX_CODING_UINT,
+     "httpStatusCode", ""},
+   {0, IPFIX_FT_HTTPREQUESTMETHOD, 2, IPFIX_CODING_UINT,
+     "httpRequestMethod", ""},
+   {0, IPFIX_FT_SUBTEMPLATELIST, 65535, IPFIX_CODING_STL,
+     "subTemplateList", ""},
    { 0, 0, -1, 0, NULL, NULL, }
 };

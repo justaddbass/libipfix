@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <ipfix.h>
 #include "mlog.h"
@@ -16,6 +17,7 @@
 struct http_record {
     unsigned short request_method;
     unsigned short status_code;
+    char str[16];
 };
 
 int main ( int argc, char **argv )
@@ -114,13 +116,14 @@ int main ( int argc, char **argv )
     }
 
     //http session template
-    if ( ipfix_new_data_template( ipfixh, &http_session_template, 2 ) <0 ) {
+    if ( ipfix_new_data_template( ipfixh, &http_session_template, 3 ) <0 ) {
         fprintf( stderr, "ipfix_new_template() failed: %s\n",
                  strerror(errno) );
         exit(1);
     }
     if((ipfix_add_field(ipfixh, http_session_template, 0, IPFIX_FT_HTTPREQUESTMETHOD, 2) < 0)
-            || (ipfix_add_field(ipfixh, http_session_template, 0, IPFIX_FT_HTTPSTATUSCODE, 2) < 0)) {
+            || (ipfix_add_field(ipfixh, http_session_template, 0, IPFIX_FT_HTTPSTATUSCODE, 2) < 0)
+            || (ipfix_add_field(ipfixh, http_session_template, 0, IPFIX_FT_WLANSSID, IPFIX_FT_VARLEN) < 0)) {
         fprintf(stderr, "125 add field error %s\n", strerror(errno));
         exit(1);
     }
@@ -139,21 +142,41 @@ int main ( int argc, char **argv )
     ipfix_set_stl_tmpl(ipfixh, stl_template, http_session_template);
 
     struct http_record *rec = malloc(sizeof(struct http_record) * 4);
-    rec[0] = (struct http_record) {.request_method=1, .status_code=200};
-    rec[1] = (struct http_record) {.request_method=2, .status_code=301};
-    rec[2] = (struct http_record) {.request_method=3, .status_code=404};
-    rec[3] = (struct http_record) {.request_method=4, .status_code=500};
+    rec[0] = (struct http_record) {.request_method=1, .status_code=200, .str="HELLO"};
+    rec[1] = (struct http_record) {.request_method=2, .status_code=301, .str="WORLD\n"};
+    rec[2] = (struct http_record) {.request_method=3, .status_code=404, .str="TEST "};
+    rec[3] = (struct http_record) {.request_method=4, .status_code=500, .str="123"};
 
     subtemplatelist_t *stl = malloc(sizeof(subtemplatelist_t));
-    stl->addrs = malloc(sizeof(struct http_record*) * 4);
-    for(int i = 0; i < 4; ++i)
-        stl->addrs[i] = &rec[i];
-    stl->offsets = malloc(sizeof(uint32_t) * 4);
-    for(int i = 0; i < 4; ++i)
-        stl->offsets[i] = i * 2;
-    stl->max_sz = 16;
     stl->templ = http_session_template;
     stl->elem_count = 4;
+    stl->max_sz = 0;
+
+    stl->addrs = malloc(sizeof(struct http_record*) * stl->elem_count);
+    for(int i = 0; i < stl->elem_count; ++i)
+        stl->addrs[i] = &rec[i];
+
+    unsigned int nfields = stl->templ->nfields;
+    #define idx(i,j)  ((i)*nfields+(j))
+
+    stl->offsets = (uint32_t*)malloc(sizeof(uint32_t) * stl->elem_count * nfields);
+    stl->lens = (uint32_t*)malloc(sizeof(uint32_t) * stl->elem_count * nfields);
+    for(int i = 0; i < stl->elem_count; ++i) {
+        stl->offsets[idx(i,0)] = 0;
+        for(int j = 0; j < nfields; ++j) {
+            if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
+                stl->lens[idx(i,j)] = strlen((char*)((char*)stl->addrs[i] + stl->offsets[idx(i,j)]));
+            else
+                stl->lens[idx(i,j)] = stl->templ->fields[j].elem->ft->length;
+            if(j != nfields - 1)
+                stl->offsets[idx(i,j+1)] = stl->offsets[idx(i,j)] + stl->lens[idx(i,j)];
+            stl->max_sz += stl->lens[idx(i,j)];
+        }
+    }
+
+    // for(int i = 0; i < stl->elem_count; ++i)
+    //     for(int j = 0; j < nfields; ++j)
+    //         printf("%d %d %d\n",i, j, stl->lens[idx(i,j)]);
 
     /** export some data
      */
@@ -161,12 +184,6 @@ int main ( int argc, char **argv )
 
         printf( "[%d] export some data ... ", j );
         fflush( stdout) ;
-
-        /*if ( ipfix_export( ipfixh, http_session_template, buf, &bytes ) <0 ) {
-            fprintf( stderr, "ipfix_export() failed: %s\n",
-                     strerror(errno) );
-            exit(1);
-        }*/
 
         if(ipfix_export(ipfixh, stl_template, buf, stl) < 0) {
             fprintf( stderr, "ipfix_export() failed: %s\n", strerror(errno) );
@@ -193,6 +210,10 @@ int main ( int argc, char **argv )
     /** clean up
      */
     free(rec);
+    free(stl->addrs);
+    free(stl->offsets);
+    free(stl->lens);
+    free(stl);
     ipfix_delete_template( ipfixh, http_session_template );
     ipfix_delete_template( ipfixh, stl_template);
     ipfix_close( ipfixh );
