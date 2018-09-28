@@ -145,7 +145,7 @@ int main ( int argc, char **argv )
     rec[0] = (struct http_record) {.request_method=1, .status_code=200, .str="HELLO"};
     rec[1] = (struct http_record) {.request_method=2, .status_code=301, .str="WORLD\n"};
     rec[2] = (struct http_record) {.request_method=3, .status_code=404, .str="TEST "};
-    rec[3] = (struct http_record) {.request_method=4, .status_code=500, .str="123"};
+    rec[3] = (struct http_record) {.request_method=4, .status_code=500, .str="1 2 3"};
 
     subtemplatelist_t *stl = malloc(sizeof(subtemplatelist_t));
     stl->templ = http_session_template;

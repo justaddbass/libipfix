@@ -395,13 +395,10 @@ int ipfix_encode_int( void *in, void *out, size_t len )
           o[0] = i[0];
           break;
       case 2:
-	  		printf("out: %p %p\n", out, (void*)ALIGN((uintptr_t)out, 2));
-			printf("in: %p %p\n", in, (void*)ALIGN((uintptr_t)in, 2));
-          //strncpy( &tmp16, i, len );
 		  memcpy( &tmp16, i, len );
           tmp16 = htons( tmp16 );
-          //strncpy( (char*)ALIGN((uintptr_t)out,2), (char*)&tmp16, len );
-		  memcpy( (char*)ALIGN((uintptr_t)out,2), (char*)&tmp16, len );
+		  //memcpy( (void*)ALIGN((uintptr_t)out,2), (void*)&tmp16, len );
+		  memcpy(out, &tmp16, len);
           break;
       case 4:
           memcpy( &tmp32, i, len );
@@ -669,7 +666,7 @@ int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 			else {
 				//fields[i].elem->encode_stl(stl_in->ptrs[i], , elem_length, templ->sub_template);
 			}
-			offset += stl_in->lens[i*nfields+j];
+			offset += stl_in->lens[i*nfields+j] + (stl_in->lens[i*nfields+j] % 2);
 			printf("offset: %d\n", offset);
 		}
 		/*offset += _ipfix_encode_fields(
