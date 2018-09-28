@@ -152,24 +152,29 @@ int main ( int argc, char **argv )
     stl->elem_count = 4;
     stl->max_sz = 0;
 
-    stl->addrs = malloc(sizeof(struct http_record*) * stl->elem_count);
-    for(int i = 0; i < stl->elem_count; ++i)
-        stl->addrs[i] = &rec[i];
-
     unsigned int nfields = stl->templ->nfields;
     #define idx(i,j)  ((i)*nfields+(j))
 
-    stl->offsets = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
+    stl->addrs = malloc(sizeof(struct http_record*) * stl->elem_count * nfields);
+    for(int i = 0; i < stl->elem_count; ++i) {
+            stl->addrs[idx(i,0)] = &rec[i].request_method;
+            stl->addrs[idx(i,1)] = &rec[i].status_code;
+            stl->addrs[idx(i,2)] = &rec[i].str;
+    }
+
+
+    //stl->offsets = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
     stl->lens = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
     for(int i = 0; i < stl->elem_count; ++i) {
-        stl->offsets[idx(i,0)] = 0;
+        //stl->offsets[idx(i,0)] = 0;
         for(int j = 0; j < nfields; ++j) {
             if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
-                stl->lens[idx(i,j)] = strlen((stl->addrs[i] + stl->offsets[idx(i,j)]));
+                stl->lens[idx(i,j)] = strlen(stl->addrs[idx(i,j)]);
+                //stl->lens[idx(i,j)] = strlen((stl->addrs[i] + stl->offsets[idx(i,j)]));
             else
                 stl->lens[idx(i,j)] = stl->templ->fields[j].elem->ft->length;
-            if(j != nfields - 1)
-                stl->offsets[idx(i,j+1)] = stl->offsets[idx(i,j)] + stl->lens[idx(i,j)];
+            //if(j != nfields - 1)
+                //stl->offsets[idx(i,j+1)] = stl->offsets[idx(i,j)] + stl->lens[idx(i,j)];
             stl->max_sz += stl->lens[idx(i,j)];
         }
     }
@@ -211,7 +216,7 @@ int main ( int argc, char **argv )
      */
     free(rec);
     free(stl->addrs);
-    free(stl->offsets);
+    //free(stl->offsets);
     free(stl->lens);
     free(stl);
     ipfix_delete_template( ipfixh, http_session_template );

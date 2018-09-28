@@ -53,7 +53,7 @@ $$LIC$$
 
 /*----- defines ----------------------------------------------------------*/
 
-#define DEBUG
+#define NODEBUG
 
 #ifndef NTOHLL
 uint8_t g_isLittleEndian = 0;
@@ -164,17 +164,28 @@ int ipfix_set_stl_tmpl(ipfix_t *ifh, ipfix_template_t *templ, ipfix_template_t *
 	templ->sub_template = sub_template;
 }
 
-int ipfix_init_stl(ipfix_t *ifh, subtemplatelist_t *stl, ipfix_template_t *templ, uint32_t elem_count, uint32_t max_sz, void* data) {
+int ipfix_init_stl(ipfix_t *ifh, subtemplatelist_t *stl, ipfix_template_t *templ, uint32_t elem_count, void* data) {
 	stl->templ = templ;
 	stl->elem_count = elem_count;
-	stl->max_sz = max_sz;
 
-	// stl->addrs = malloc(sizeof(struct http_record*) * stl->elem_count);
-    // for(int i = 0; i < 4; ++i)
-    //     stl->addrs[i] = &rec[i];
-    // stl->offsets = malloc(sizeof(uint32_t) * stl->templ->nfields);
-    // for(int i = 0; i < 4; ++i)
-    //     stl->offsets[i] = i * 2;
+	unsigned int nfields = stl->templ->nfields;
+    #define idx(i,j)  ((i)*nfields+(j))
+
+	//stl->offsets = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
+    stl->lens = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
+    for(int i = 0; i < stl->elem_count; ++i) {
+        //stl->offsets[idx(i,0)] = 0;
+        for(int j = 0; j < nfields; ++j) {
+            if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
+                stl->lens[idx(i,j)] = strlen(stl->addrs[idx(i,j)]);
+                //stl->lens[idx(i,j)] = strlen((stl->addrs[i] + stl->offsets[idx(i,j)]));
+            else
+                stl->lens[idx(i,j)] = stl->templ->fields[j].elem->ft->length;
+            //if(j != nfields - 1)
+                //stl->offsets[idx(i,j+1)] = stl->offsets[idx(i,j)] + stl->lens[idx(i,j)];
+            stl->max_sz += stl->lens[idx(i,j)];
+        }
+    }
 
 	return 0;
 }
@@ -654,6 +665,7 @@ int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 	memcpy(out, &stl_out, sizeof(stl_out));
 
 	for(int i = 0; i < stl_in->elem_count; ++i) {
+#if 0
 		for(int j = 0; j < templ->nfields; ++j) {
 			int coding = fields[j].elem->ft->coding;
 			int elem_length = fields[j].elem->ft->length;
@@ -669,13 +681,15 @@ int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 			offset += stl_in->lens[i*nfields+j] + (stl_in->lens[i*nfields+j] % 2);
 			printf("offset: %d\n", offset);
 		}
-		/*offset += _ipfix_encode_fields(
+#else
+		offset += _ipfix_encode_fields(
 		    stl_in->templ,
 		    stl_in->templ->nfields,
-		    stl_in->addrs[i],
+		    &stl_in->addrs[i*nfields],
 		    &stl_in->lens[i*nfields],
 		    (stl_out.content + offset),
-		    len);*/
+		    len);
+#endif
 	}
 
 	return 0;
@@ -2425,6 +2439,10 @@ int ipfix_export( ipfix_t *ifh, ipfix_template_t *templ, ... )
 		if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
 			subtemplatelist_t *stl = (subtemplatelist_t*)g_data.addrs[i];
 			g_data.lens[i] = stl->max_sz + 3;
+			for(int j = 0; j < stl->templ->nfields; ++j) {
+				if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
+					g_data.lens[i] += 1 * stl->elem_count;
+			}
 		}
         else if ( templ->fields[i].flength == IPFIX_FT_VARLEN )
             g_data.lens[i] = va_arg(args, int);

@@ -236,7 +236,7 @@ int  ipfix_export_flush( ipfix_t *ifh );
 void ipfix_close( ipfix_t *ifh );
 int ipfix_add_stl(ipfix_t *ifh, ipfix_template_t *templ);
 int ipfix_set_stl_tmpl(ipfix_t *ifh, ipfix_template_t *templ, ipfix_template_t *sub_template);
-int ipfix_init_stl(ipfix_t *ifh, subtemplatelist_t *stl, ipfix_template_t *templ, uint32_t elem_count, uint32_t max_sz, void* data);
+int ipfix_init_stl(ipfix_t *ifh, subtemplatelist_t *stl, ipfix_template_t *templ, uint32_t elem_count, void* data);
 
 /** experimental
  */
