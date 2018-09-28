@@ -17,7 +17,7 @@
 struct http_record {
     unsigned short request_method;
     unsigned short status_code;
-    char str[16];
+    char str[28];
 };
 
 int main ( int argc, char **argv )
@@ -159,13 +159,13 @@ int main ( int argc, char **argv )
     unsigned int nfields = stl->templ->nfields;
     #define idx(i,j)  ((i)*nfields+(j))
 
-    stl->offsets = (uint32_t*)malloc(sizeof(uint32_t) * stl->elem_count * nfields);
-    stl->lens = (uint32_t*)malloc(sizeof(uint32_t) * stl->elem_count * nfields);
+    stl->offsets = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
+    stl->lens = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
     for(int i = 0; i < stl->elem_count; ++i) {
         stl->offsets[idx(i,0)] = 0;
         for(int j = 0; j < nfields; ++j) {
             if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
-                stl->lens[idx(i,j)] = strlen((char*)((char*)stl->addrs[i] + stl->offsets[idx(i,j)]));
+                stl->lens[idx(i,j)] = strlen((stl->addrs[i] + stl->offsets[idx(i,j)]));
             else
                 stl->lens[idx(i,j)] = stl->templ->fields[j].elem->ft->length;
             if(j != nfields - 1)

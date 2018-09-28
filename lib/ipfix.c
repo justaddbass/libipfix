@@ -73,120 +73,6 @@ void testEndianness() {
         { uint32_t _t=htonl((val)); memcpy((b),&_t,4); (l)+=4; }
 
 
-#define PREPARE_FIRST_COPY()                                      \
-    do {                                                          \
-    if (src_len >= (CHAR_BIT - dst_offset_modulo)) {              \
-        *dst     &= reverse_mask[dst_offset_modulo];              \
-        src_len -= CHAR_BIT - dst_offset_modulo;                  \
-    } else {                                                      \
-        *dst     &= reverse_mask[dst_offset_modulo]               \
-              | reverse_mask_xor[dst_offset_modulo + src_len];    \
-         c       &= reverse_mask[dst_offset_modulo + src_len];    \
-        src_len = 0;                                              \
-    } } while (0)
-
-
-static void
-bitarray_copy(const unsigned char *src_org, int src_offset, int src_len,
-                    unsigned char *dst_org, int dst_offset)
-{
-    static const unsigned char mask[] =
-        { 0x00, 0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x7f, 0xff };
-    static const unsigned char reverse_mask[] =
-        { 0x00, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe, 0xff };
-    static const unsigned char reverse_mask_xor[] =
-        { 0xff, 0x7f, 0x3f, 0x1f, 0x0f, 0x07, 0x03, 0x01, 0x00 };
-
-    if (src_len) {
-        const unsigned char *src;
-              unsigned char *dst;
-        int                  src_offset_modulo,
-                             dst_offset_modulo;
-
-        src = src_org + (src_offset / CHAR_BIT);
-        dst = dst_org + (dst_offset / CHAR_BIT);
-
-        src_offset_modulo = src_offset % CHAR_BIT;
-        dst_offset_modulo = dst_offset % CHAR_BIT;
-
-        if (src_offset_modulo == dst_offset_modulo) {
-            int              byte_len;
-            int              src_len_modulo;
-            if (src_offset_modulo) {
-                unsigned char   c;
-
-                c = reverse_mask_xor[dst_offset_modulo]     & *src++;
-
-                PREPARE_FIRST_COPY();
-                *dst++ |= c;
-            }
-
-            byte_len = src_len / CHAR_BIT;
-            src_len_modulo = src_len % CHAR_BIT;
-
-            if (byte_len) {
-                memcpy(dst, src, byte_len);
-                src += byte_len;
-                dst += byte_len;
-            }
-            if (src_len_modulo) {
-                *dst     &= reverse_mask_xor[src_len_modulo];
-                *dst |= reverse_mask[src_len_modulo]     & *src;
-            }
-        } else {
-            int             bit_diff_ls,
-                            bit_diff_rs;
-            int             byte_len;
-            int             src_len_modulo;
-            unsigned char   c;
-            /*
-             * Begin: Line things up on destination.
-             */
-            if (src_offset_modulo > dst_offset_modulo) {
-                bit_diff_ls = src_offset_modulo - dst_offset_modulo;
-                bit_diff_rs = CHAR_BIT - bit_diff_ls;
-
-                c = *src++ << bit_diff_ls;
-                c |= *src >> bit_diff_rs;
-                c     &= reverse_mask_xor[dst_offset_modulo];
-            } else {
-                bit_diff_rs = dst_offset_modulo - src_offset_modulo;
-                bit_diff_ls = CHAR_BIT - bit_diff_rs;
-
-                c = *src >> bit_diff_rs     &
-                    reverse_mask_xor[dst_offset_modulo];
-            }
-            PREPARE_FIRST_COPY();
-            *dst++ |= c;
-
-            /*
-             * Middle: copy with only shifting the source.
-             */
-            byte_len = src_len / CHAR_BIT;
-
-            while (--byte_len >= 0) {
-                c = *src++ << bit_diff_ls;
-                c |= *src >> bit_diff_rs;
-                *dst++ = c;
-            }
-
-            /*
-             * End: copy the remaing bits;
-             */
-            src_len_modulo = src_len % CHAR_BIT;
-            if (src_len_modulo) {
-                c = *src++ << bit_diff_ls;
-                c |= *src >> bit_diff_rs;
-                c     &= reverse_mask[src_len_modulo];
-
-                *dst     &= reverse_mask_xor[src_len_modulo];
-                *dst |= c;
-            }
-        }
-    }
-}
-
-
 /*----- revision id ------------------------------------------------------*/
 
 static const char cvsid[]="$Id: ipfix.c 996 2009-03-19 18:14:44Z csc $";
@@ -500,17 +386,22 @@ int ipfix_encode_int( void *in, void *out, size_t len )
     uint32_t      tmp32;
     uint64_t      tmp64;
 
+	#define ALIGN(x,a)              __ALIGN_MASK(x,(typeof(x))(a)-1)
+	#define __ALIGN_MASK(x,mask)    (((x)+(mask))&~(mask))
+
     switch ( len )
     {
       case 1:
           o[0] = i[0];
           break;
       case 2:
-          //memcpy( &tmp16, i, len );
-		  bitarray_copy(&tmp16, 0, len, i, 0);
+	  		printf("out: %p %p\n", out, (void*)ALIGN((uintptr_t)out, 2));
+			printf("in: %p %p\n", in, (void*)ALIGN((uintptr_t)in, 2));
+          //strncpy( &tmp16, i, len );
+		  memcpy( &tmp16, i, len );
           tmp16 = htons( tmp16 );
-          //memcpy( out, &tmp16, len );
-		  bitarray_copy(out, 0, len, &tmp16, 0);
+          //strncpy( (char*)ALIGN((uintptr_t)out,2), (char*)&tmp16, len );
+		  memcpy( (char*)ALIGN((uintptr_t)out,2), (char*)&tmp16, len );
           break;
       case 4:
           memcpy( &tmp32, i, len );
@@ -761,32 +652,33 @@ int ipfix_encode_stl(void* in, void* out, size_t len, void* stl) {
 	subtemplatelist_t *stl_in = (subtemplatelist_t*)in;
 	subtemplatelist_rec_t stl_out = SUBTEMPLATELIST_INIT();
 	stl_out.template_id = htons(templ->tid);
-	stl_out.content = (void*)((char*)out + sizeof(stl_out) - sizeof(subtemplatelist_t*));
+	stl_out.content = (out + sizeof(stl_out) - sizeof(subtemplatelist_t*));
 
 	memcpy(out, &stl_out, sizeof(stl_out));
 
 	for(int i = 0; i < stl_in->elem_count; ++i) {
-		/*for(int j = 0; j < templ->nfields; ++j) {
+		for(int j = 0; j < templ->nfields; ++j) {
 			int coding = fields[j].elem->ft->coding;
 			int elem_length = fields[j].elem->ft->length;
-			//printf("%d %d %d %d\n", i, j, coding, stl_in->lens[i*nfields+j]);
+			printf("%d %d %d %d\n", i, j, coding, stl_in->lens[i*nfields+j]);
 			if(coding != IPFIX_CODING_STL) {
-				void *ptr1 = NULL;// ((char*)stl_in->addrs[i] + stl_in->offsets[i*nfields+j]);
-				void *ptr2 = NULL;//((char*)stl_out.content + offset);
+				void *ptr1 = (stl_in->addrs[i] + stl_in->offsets[i*nfields+j]);
+				void *ptr2 = (stl_out.content + offset);
 				fields[j].elem->encode(ptr1, ptr2, stl_in->lens[i*nfields+j]);
 			}
 			else {
 				//fields[i].elem->encode_stl(stl_in->ptrs[i], , elem_length, templ->sub_template);
 			}
-			offset += elem_length;
-		}*/
-		offset += _ipfix_encode_fields(
+			offset += stl_in->lens[i*nfields+j];
+			printf("offset: %d\n", offset);
+		}
+		/*offset += _ipfix_encode_fields(
 		    stl_in->templ,
 		    stl_in->templ->nfields,
-		    fields,
+		    stl_in->addrs[i],
 		    &stl_in->lens[i*nfields],
 		    (stl_out.content + offset),
-		    len);
+		    len);*/
 	}
 
 	return 0;
