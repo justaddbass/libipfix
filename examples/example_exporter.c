@@ -148,6 +148,7 @@ int main ( int argc, char **argv )
     rec[3] = (struct http_record) {.request_method=4, .status_code=500, .str="1 2 3"};
 
     subtemplatelist_t *stl = malloc(sizeof(subtemplatelist_t));
+    //ipfix_init_stl(ipfixh, stl, http_session_template, 4, rec);
     stl->templ = http_session_template;
     stl->elem_count = 4;
     stl->max_sz = 0;
@@ -166,6 +167,7 @@ int main ( int argc, char **argv )
     //stl->offsets = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
     stl->lens = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
     for(int i = 0; i < stl->elem_count; ++i) {
+
         //stl->offsets[idx(i,0)] = 0;
         for(int j = 0; j < nfields; ++j) {
             if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
@@ -218,6 +220,7 @@ int main ( int argc, char **argv )
     free(stl->addrs);
     //free(stl->offsets);
     free(stl->lens);
+    ipfix_free_stl(ipfixh, stl_template);
     free(stl);
     ipfix_delete_template( ipfixh, http_session_template );
     ipfix_delete_template( ipfixh, stl_template);

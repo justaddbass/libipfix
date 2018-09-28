@@ -167,27 +167,39 @@ int ipfix_set_stl_tmpl(ipfix_t *ifh, ipfix_template_t *templ, ipfix_template_t *
 int ipfix_init_stl(ipfix_t *ifh, subtemplatelist_t *stl, ipfix_template_t *templ, uint32_t elem_count, void* data) {
 	stl->templ = templ;
 	stl->elem_count = elem_count;
+	stl->max_sz = 0;
 
 	unsigned int nfields = stl->templ->nfields;
     #define idx(i,j)  ((i)*nfields+(j))
 
-	//stl->offsets = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
+	stl->addrs = malloc(sizeof(struct http_record*) * stl->elem_count * nfields);
+
     stl->lens = malloc(sizeof(uint16_t) * stl->elem_count * nfields);
     for(int i = 0; i < stl->elem_count; ++i) {
-        //stl->offsets[idx(i,0)] = 0;
         for(int j = 0; j < nfields; ++j) {
+			stl->addrs[idx(i,j)] = (data + stl->max_sz);
             if(stl->templ->fields[j].elem->ft->length == IPFIX_FT_VARLEN)
                 stl->lens[idx(i,j)] = strlen(stl->addrs[idx(i,j)]);
-                //stl->lens[idx(i,j)] = strlen((stl->addrs[i] + stl->offsets[idx(i,j)]));
             else
                 stl->lens[idx(i,j)] = stl->templ->fields[j].elem->ft->length;
-            //if(j != nfields - 1)
-                //stl->offsets[idx(i,j+1)] = stl->offsets[idx(i,j)] + stl->lens[idx(i,j)];
             stl->max_sz += stl->lens[idx(i,j)];
         }
     }
 
+	#undef idx
+
 	return 0;
+}
+
+int ipfix_free_stl(ipfix_t *ifh, ipfix_template_t *templ) {
+	//free(stl->addrs);
+	//free(stl->lens);
+
+	for(int i = 0; i < templ->nfields; ++i) {
+		if(templ->fields[i].elem->ft->coding == IPFIX_CODING_STL) {
+			ipfix_free_unknown_ftinfo(templ->fields[i].elem);
+		}
+	}
 }
 
 /* name      : do_writeselect
@@ -397,9 +409,6 @@ int ipfix_encode_int( void *in, void *out, size_t len )
     uint32_t      tmp32;
     uint64_t      tmp64;
 
-	#define ALIGN(x,a)              __ALIGN_MASK(x,(typeof(x))(a)-1)
-	#define __ALIGN_MASK(x,mask)    (((x)+(mask))&~(mask))
-
     switch ( len )
     {
       case 1:
@@ -408,7 +417,6 @@ int ipfix_encode_int( void *in, void *out, size_t len )
       case 2:
 		  memcpy( &tmp16, i, len );
           tmp16 = htons( tmp16 );
-		  //memcpy( (void*)ALIGN((uintptr_t)out,2), (void*)&tmp16, len );
 		  memcpy(out, &tmp16, len);
           break;
       case 4:

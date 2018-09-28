@@ -10,3 +10,8 @@ lib/libipfix.so*
 libmisc/libmisc.so*
 probe/ipfix_probe
 config.h
+*.o
+*.log
+*.d
+*.d.[0-9]*
+*.a
